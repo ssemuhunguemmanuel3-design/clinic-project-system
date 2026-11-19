@@ -1,4 +1,4 @@
-pymongo
-dnspython
-streamlit
-pandas
+pymongo==4.15.5
+dnspython==2.8.0
+streamlit==1.49.1
+pandas==2.3.3
