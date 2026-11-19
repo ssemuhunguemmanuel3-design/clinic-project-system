@@ -1,0 +1,8 @@
+venv/
+__pycache__/
+*.pyc
+backups/
+database_export/
+old_version_*/
+.streamlit/secrets.toml
+.env

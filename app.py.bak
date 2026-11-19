@@ -1,0 +1,123 @@
+﻿import streamlit as st
+import pandas as pd
+from pymongo import MongoClient
+from datetime import datetime
+
+client = MongoClient("mongodb://localhost:27017/")
+db = client["clinicDB"]
+patients = db["patients"]
+doctors = db["doctors"]
+appointments = db["appointments"]
+
+def to_df(docs):
+    df = pd.DataFrame(list(docs))
+    if not df.empty:
+        df["_id"] = df["_id"].astype(str)
+    return df
+
+st.set_page_config(page_title="Clinic System", page_icon="🏥")
+st.title("🏥 Health Clinic Management System")
+menu = st.sidebar.selectbox("Menu", ["Dashboard", "Patients", "Doctors", "Appointments"])
+
+if menu == "Dashboard":
+    st.header("Overview")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Patients", patients.count_documents({}))
+    c2.metric("Doctors", doctors.count_documents({}))
+    c3.metric("Appointments", appointments.count_documents({}))
+    st.subheader("Appointments per doctor")
+    result = list(appointments.aggregate([{"$group": {"_id": "$doctorName", "total": {"$sum": 1}}}]))
+    if result:
+        df = pd.DataFrame(result).rename(columns={"_id": "Doctor"})
+        st.bar_chart(df.set_index("Doctor"))
+    else:
+        st.info("No appointments yet.")
+
+elif menu == "Patients":
+    st.header("Patients")
+    with st.form("add_patient", clear_on_submit=True):
+        name = st.text_input("Full name")
+        gender = st.selectbox("Gender", ["Female", "Male"])
+        dob = st.date_input("Date of birth", min_value=datetime(1920, 1, 1))
+        phone = st.text_input("Phone")
+        address = st.text_input("Address")
+        allergies = st.text_input("Allergies (separate with commas)")
+        if st.form_submit_button("Save patient"):
+            if name and phone:
+                patients.insert_one({
+                    "name": name, "gender": gender,
+                    "dob": datetime.combine(dob, datetime.min.time()),
+                    "phone": phone, "address": address,
+                    "allergies": [a.strip() for a in allergies.split(",") if a.strip()],
+                    "createdAt": datetime.now()})
+                st.success("Patient saved.")
+            else:
+                st.error("Name and phone are required.")
+    st.subheader("All patients")
+    search = st.text_input("Search by name")
+    query = {"name": {"$regex": search, "$options": "i"}} if search else {}
+    df = to_df(patients.find(query))
+    if df.empty:
+        st.info("No patients found.")
+    else:
+        st.dataframe(df, use_container_width=True)
+        st.subheader("Delete a patient")
+        options = {f"{p['name']} ({p['phone']})": p["_id"] for p in patients.find(query)}
+        choice = st.selectbox("Select patient", list(options.keys()))
+        if st.button("Delete"):
+            patients.delete_one({"_id": options[choice]})
+            st.rerun()
+
+elif menu == "Doctors":
+    st.header("Doctors")
+    with st.form("add_doctor", clear_on_submit=True):
+        name = st.text_input("Doctor name")
+        specialty = st.selectbox("Specialty", ["General", "Pediatrics", "Gynecology", "Dentistry", "Surgery"])
+        phone = st.text_input("Phone")
+        email = st.text_input("Email")
+        if st.form_submit_button("Save doctor"):
+            if name:
+                doctors.insert_one({"name": name, "specialty": specialty, "phone": phone, "email": email})
+                st.success("Doctor saved.")
+            else:
+                st.error("Name is required.")
+    st.subheader("All doctors")
+    df = to_df(doctors.find())
+    if df.empty:
+        st.info("No doctors yet.")
+    else:
+        st.dataframe(df, use_container_width=True)
+
+elif menu == "Appointments":
+    st.header("Appointments")
+    patient_list = list(patients.find())
+    doctor_list = list(doctors.find())
+    if not patient_list or not doctor_list:
+        st.warning("Add at least one patient and one doctor first.")
+    else:
+        with st.form("add_appt", clear_on_submit=True):
+            p = st.selectbox("Patient", patient_list, format_func=lambda x: x["name"])
+            d = st.selectbox("Doctor", doctor_list, format_func=lambda x: f"{x['name']} ({x['specialty']})")
+            date = st.date_input("Date")
+            time = st.time_input("Time")
+            reason = st.text_area("Reason for visit")
+            if st.form_submit_button("Book appointment"):
+                appointments.insert_one({
+                    "patientId": p["_id"], "patientName": p["name"],
+                    "doctorId": d["_id"], "doctorName": d["name"],
+                    "date": datetime.combine(date, datetime.min.time()),
+                    "time": time.strftime("%H:%M"), "reason": reason, "status": "Scheduled"})
+                st.success("Appointment booked.")
+    st.subheader("All appointments")
+    df = to_df(appointments.find().sort("date", 1))
+    if df.empty:
+        st.info("No appointments yet.")
+    else:
+        st.dataframe(df[["patientName", "doctorName", "date", "time", "reason", "status"]], use_container_width=True)
+        st.subheader("Update status")
+        appts = list(appointments.find())
+        a = st.selectbox("Appointment", appts, format_func=lambda x: f"{x['patientName']} - {x['doctorName']} - {x['time']}")
+        new_status = st.selectbox("New status", ["Scheduled", "Completed", "Cancelled"])
+        if st.button("Update"):
+            appointments.update_one({"_id": a["_id"]}, {"$set": {"status": new_status}})
+            st.rerun()
