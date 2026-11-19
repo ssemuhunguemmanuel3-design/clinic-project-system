@@ -66,3 +66,29 @@ To use another MongoDB server, set the MONGO_URI environment variable before run
 
 ## Documentation
 See the docs folder: USER_MANUAL.md, DATABASE_DESIGN.md, PRESENTATION_GUIDE.md.
+
+---
+
+title: City Health Clinic
+emoji: 🏥
+colorFrom: blue
+colorTo: green
+sdk: streamlit
+sdk_version: "1.49.1"
+app_file: app.py
+pinned: false
+
+---
+
+## Hosted deployment
+
+The web app can be deployed on Streamlit Community Cloud:
+
+1. Create a MongoDB Atlas cluster and database user.
+2. Under **Network Access**, allow `0.0.0.0/0` if the app should be accessible from all networks.
+3. Deploy this repository on Streamlit Community Cloud with `app.py` as the main file.
+4. In Streamlit: **App settings > Secrets**, add:
+
+       MONGO_URI = "mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/clinicDB?retryWrites=true&w=majority"
+
+5. Reboot the app. Streamlit will provide a public URL similar to `https://clinic-project-system.streamlit.app`.
